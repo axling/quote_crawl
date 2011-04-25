@@ -1,0 +1,14 @@
+{application, quote_crawl,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {modules, [quote_crawl,
+	     quote_crawl_sup]},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { quote_crawl, []}},
+  {env, []}
+ ]}.
