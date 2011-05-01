@@ -4,7 +4,9 @@
   {vsn, "1"},
   {registered, []},
   {modules, [quote_crawl,
-	     quote_crawl_sup]},
+	     quote_crawl_sup,
+	     qc_omx,
+	     qc_text_tv]},
   {applications, [
                   kernel,
                   stdlib
