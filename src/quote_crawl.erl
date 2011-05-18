@@ -3,7 +3,7 @@
 %%%-------------------------------------------------------------------
 -module(quote_crawl).
 
--export([init/0, start/2, stop/1, start_link/0, get/1, update/1,
+-export([init/0, start/2, stop/1, start_link/0, get/1, update/0,
 	 get_stocks_dict/0]).
 
 -include("quote_crawl.hrl").
@@ -18,11 +18,11 @@ get(Stock) ->
 	    Value
     end.
 
-update(Stock) ->
-    ?MODULE ! {update, Stock, self()},
+update() ->
+    ?MODULE ! {update, self()},
     receive 
-	{update_reply, Value} ->
-	    Value
+	update_reply ->
+	    ok
     end.
 
 get_stocks_dict() ->
@@ -39,13 +39,13 @@ init() ->
 
 loop(StocksDict) ->
     receive 
-	{update, Stock, From} ->
+	{update, From} ->
 	    Pages = [qc_http:get_text_tv(Page) || Page <- lists:seq(203, 220)],
 	    ParsedResults = [ qc_text_tv:parse_page(Page) || Page <- Pages],
 	    
 	    NewStocksDict = update_dict(lists:flatten(ParsedResults), 
 					StocksDict),	    
-	    From ! {update_reply, dict:fetch(Stock, NewStocksDict)},
+	    From ! update_reply,
 	    loop(NewStocksDict);
 	{get, Stock, From} ->
 	    case dict:is_key(Stock, StocksDict) of
