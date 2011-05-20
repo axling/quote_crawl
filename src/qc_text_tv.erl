@@ -7,59 +7,63 @@
 
 -export([parse_page/1]).
 
--define(GENERAL_SPAN, "<span\\s*class=\"[YCW]\">[^<]+</span>").
-%%-define(GENERAL_SPAN, "\n").
--define(FLOAT, "[0-9]+\\.[0-9]+").
--define(NUMBER, "(?:" ++ ?FLOAT ++ "|\\d+)").
--define(NAME, "[A-Wa-w]+").
--define(STOCK_TYPE1, "<span\\s*class=\"[YC]\">\\s*(?<diff>" ++ ?NUMBER ++
-	")\\s+(?<buy1>" ++ ?NUMBER ++ ")\\s+(?<sell1>" ++ ?NUMBER ++ 
-	")\\s*(?<name1>" ++ ?NAME ++ ")\\s*(?<latest1>" ++ ?NUMBER ++ 
-	")\\s+(?<number1>" ++ ?NUMBER ++ ")\\s*</span>").
--define(STOCK_TYPE2, "<span\\s*class=\"W\">\\s*(?<buy2>" ++ 
-	?NUMBER ++")\\s+(?<sell2>" ++ ?NUMBER ++ 
-	")\\s*(?<name2>" ++ ?NAME ++ ")\\s*(?<latest2>" ++ ?NUMBER ++ 
-	")\\s+(?<number3>" ++ ?NUMBER ++ ")\\s*</span>").
--define(STOCK_TYPE3, "<span\\s*class=\"[YC]\">\\s*" ++ ?NUMBER ++
-	"\\s+" ++ ?NUMBER ++ "\\s+" ++ ?NUMBER ++ 
-	"\\s*(?<name3>" ++ ?NAME ++ ")\\s*" ++ ?NUMBER ++ 
-	"\\s+(?<highest3>" ++ ?NUMBER ++ ")\\s+(?<lowest3>" ++ 
-	?NUMBER ++ ")\\s*</span>").
--define(STOCK_TYPE4, "<span\\s*class=\"W\">\\s*"
-	++ ?NUMBER ++ "\\s+" ++ ?NUMBER ++ 
-	"\\s*(?<name4>" ++ ?NAME ++ ")\\s*" ++ ?NUMBER ++ 
-	"\\s+(?<highest4>" ++ ?NUMBER ++ ")\\s+(?<lowest4>" ++ 
-	?NUMBER ++ ")\\s*</span>").
+-define(FALLING_STOCK_WITH_VOLUME,
+	"<span\\s+class='C'>(?<diff>(?<number>\\d+.\\d+|\\d+))\\s+"
+	"(?<buy>\\k<number>)\\s+(?<sell>\\k<number>)"
+	"(?<event>sp|xr|xd|xs|rh|th|ts|sr|po|ob|tr|bt|os|sdb|ss""|\\s+)"
+	"(?<name>[A-Wa-w]+|BIOPto 1)\\s*(?<latest>\\k<number>)\\s+"
+	"(?<volume>\\d+)</span>").
+-define(FALLING_STOCK_WITH_HIGH_LOW,
+	"<span\\s+class='C'>(?<diff>(?<number>\\d+.\\d+|\\d+))\\s+"
+	"(?<buy>\\k<number>)\\s+(?<sell>\\k<number>)"
+	"(?<event>sp|xr|xd|xs|rh|th|ts|sr|po|ob|tr|bt|os|sdb|ss""|\\s+)"
+	"(?<name>[A-Wa-w]+|BIOPto 1)\\s*(?<latest>\\k<number>)\\s+"
+	"(?<high>\\k<number>)\\s+(?<low>\\k<number>)</span>").
+-define(RISING_STOCK_WITH_VOLUME,
+	"<span\\s+class='Y'>(?<diff>(?<number>\\d+.\\d+|\\d+))\\s+"
+	"(?<buy>\\k<number>)\\s+(?<sell>\\k<number>)"
+	"(?<event>sp|xr|xd|xs|rh|th|ts|sr|po|ob|tr|bt|os|sdb|ss""|\\s+)"
+	"(?<name>[A-Wa-w]+|BIOPto 1)\\s*(?<latest>\\k<number>)\\s+"
+	"(?<volume>\\d+)</span>").
+-define(RISING_STOCK_WITH_HIGH_LOW,
+	"<span\\s+class='Y'>(?<diff>(?<number>\\d+.\\d+|\\d+))\\s+"
+	"(?<buy>\\k<number>)\\s+(?<sell>\\k<number>)"
+	"(?<event>sp|xr|xd|xs|rh|th|ts|sr|po|ob|tr|bt|os|sdb|ss""|\\s+)"
+	"(?<name>[A-Wa-w]+|BIOPto 1)\\s*(?<latest>\\k<number>)\\s+"
+	"(?<high>\\k<number>)\\s+(?<low>\\k<number>)</span>").
+-define(UNCHANGED_STOCK_WITH_VOLUME,
+	"<span\\s+class='W'>.*"
+	"(?<event>sp|xr|xd|xs|rh|th|ts|sr|po|ob|tr|bt|os|sdb|ss""|\\s+)"
+	"(?<name>[A-Wa-w]+|BIOPto 1)\\s*(?<latest>\\k<number>)\\s+"
+	"(?<volume>\\d+)</span>").
 
--define(STOCKS, "(" ++ ?STOCK_TYPE1 ++ "|" ++ ?STOCK_TYPE2 ++ "|" 
-	++ ?STOCK_TYPE3 ++ "|" ++ ?STOCK_TYPE4 ++ ")").
+-define(SPAN, "<span\\s+class='[YWC]'>.*</span>").
 
-is_match(String, RegExp) ->
-    case re:run(String, RegExp) of
+is_match(String) ->
+    case re:run(String, ?SPAN) of
 	nomatch ->
 	    false;
 	_Else ->
 	    true
     end.
 
-match(String, RegExp) ->
-    re:run(String, RegExp, [{capture, all_but_first, list}]).
-
 split(String, RegExp) ->
-    re:split(String, RegExp,[{return, list}, trim]).
+    re:split(String, RegExp, [{return, list}, trim]).
 
 parse_page(Page) ->
     StringList = split(Page, "\n"),
-    NewStringList = lists:filter(
- 		      fun(String) ->
- 			      is_match(String,?STOCKS)
- 		      end, StringList),
+    NewStringList = 
+	lists:filter(
+	  fun(String) ->
+		  is_match(String)
+	  end, StringList),
     ResultList = 
 	lists:map(
 	  fun(String) ->
-		  case match_type1(String) of
-		      {error, Reason} ->
-			  {error, Reason};
+		  case match_falling_stock_with_volume(String) of
+		      nomatch ->
+			  io:format("No match found for:~n~p~n", [String]),
+			  undefined;
 		      #stock{} = Stock ->
 			  Stock
 		  end
@@ -68,39 +72,54 @@ parse_page(Page) ->
 		 merge_entrys(ResultList)).
 
 
-match_type1(String) ->
-    case match(String, ?STOCK_TYPE1) of
-	{match, [_Diff, Buy, Sell, Name, _Latest, Number]} ->
-	    #stock{buy=list_to_number(Buy), sell=list_to_number(Sell), 
-		   name=Name, volume=list_to_integer(Number)};
+match_falling_stock_with_volume(String) ->
+    case re:run(String, ?FALLING_STOCK_WITH_VOLUME, 
+		[{capture, [diff, buy, sell, event, name, latest, volume],
+		  list}]) of
+	{match, [_Diff, Buy, Sell, _Event, Name, _Latest, Volume]} ->
+	    #stock{name=Name, buy=Buy, sell=Sell, volume=Volume};
 	nomatch ->
-	    match_type2(String)
+	    match_falling_stock_with_high_low(String)
+    end.
+match_falling_stock_with_high_low(String) ->
+    case re:run(String, ?FALLING_STOCK_WITH_HIGH_LOW,
+		[{capture, [diff, event, name, latest, high, low],
+		  list}]) of
+	{match, [_Diff, _Event, Name, _Latest, High, Low]} ->
+	    #stock{name=Name, highest=High, lowest=Low};
+	nomatch ->
+	    match_rising_stock_with_volume(String)
     end.
 
-match_type2(String) ->
-    case match(String, ?STOCK_TYPE2) of
-	{match, [Buy, Sell, Name, _Latest, Number]} ->
-	    #stock{buy=list_to_number(Buy), sell=list_to_number(Sell), 
-		   name=Name, volume=list_to_integer(Number)};
+match_rising_stock_with_volume(String) ->
+    case re:run(String, ?RISING_STOCK_WITH_VOLUME,
+		[{capture, [diff, buy, sell, event, name, latest, volume],
+		  list}]) of
+	{match, [_Diff, Buy, Sell, _Event, Name, _Latest, Volume]} ->
+	    #stock{name=Name, buy=Buy, sell=Sell, volume=Volume};
 	nomatch ->
-	    match_type3(String)
+	    match_rising_stock_with_high_low(String)
     end.
 
-match_type3(String) ->
-    case match(String, ?STOCK_TYPE3) of
-	{match, [Name, Highest, Lowest]} ->
-	    #stock{name=Name, highest=list_to_number(Highest), lowest=list_to_number(Lowest)};
+match_rising_stock_with_high_low(String) ->
+    case re:run(String, ?RISING_STOCK_WITH_HIGH_LOW,
+		[{capture, [diff, event, name, latest, high, low],
+		  list}]) of
+	{match, [_Diff, _Event, Name, _Latest, High, Low]} ->
+	    #stock{name=Name, highest=High, lowest=Low};
 	nomatch ->
-	    match_type4(String)
+	    match_unchanged_stock_with_volume(String)
     end.
 
-match_type4(String) ->
-    case match(String, ?STOCK_TYPE4) of
-	{match, [Name, Highest, Lowest]} ->
-	    #stock{name=Name, highest=list_to_number(Highest), lowest=list_to_number(Lowest)};
+match_unchanged_stock_with_volume(String) ->
+    case re:run(String, ?UNCHANGED_STOCK_WITH_VOLUME,
+		[{capture, [name, latest, volume],
+		  list}]) of
+	{match, [Name, _Latest, Volume]} ->
+	    #stock{name=Name, volume=Volume};
 	nomatch ->
-	    match_type4(String)
-    end.
+	    nomatch
+    end.    
 
 merge_entrys(ResultList) ->
     NewList = 
@@ -116,7 +135,7 @@ merge_entrys(ResultList) ->
 	  end, [], ResultList),
     lists:map(fun({_Name, [Stock1, Stock2]}) -> 
 		      merge_record(Stock1, Stock2, size(Stock1));
-		 ({_Name, [Stock1]}) ->
+		 ({_Name, [_Stock1]}) ->
 		      undefined
 	      end, NewList).
 

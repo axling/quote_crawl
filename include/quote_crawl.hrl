@@ -1,0 +1,1 @@
+-record(stock, {name, highest, lowest, buy, sell, average, volume}).
