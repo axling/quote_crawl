@@ -37,7 +37,7 @@
 	"(?<name>[A-Wa-w]+|BIOPto 1)\\s*(?<latest>\\k<number>)\\s+"
 	"(?<volume>\\d+)</span>").
 
--define(SPAN, "<span\\s+class='[YWC]'>.*</span>").
+-define(SPAN, "<span class=\"[YWC]\">.*\\<\\/span\\>").
 
 is_match(String) ->
     case re:run(String, ?SPAN) of
@@ -60,16 +60,23 @@ parse_page(Page) ->
     ResultList = 
 	lists:map(
 	  fun(String) ->
-		  case match_falling_stock_with_volume(String) of
+		  case match_stock(String) of
 		      nomatch ->
 			  io:format("No match found for:~n~p~n", [String]),
 			  undefined;
-		      #stock{} = Stock ->
-			  Stock
+		      Else ->
+			  Else
 		  end
-	  end, NewStringList),
-    lists:filter(fun(undefined)-> false; (_) -> true end,
-		 merge_entrys(ResultList)).
+	  end, NewStringList).
+    %%lists:filter(fun(undefined)-> false; (_) -> true end,
+    %%		 merge_entrys(ResultList)).
+
+match_stock(String) ->
+    %% For each entry:
+    %% read values until name
+    %% 
+    re:run(String, "<span class=\"[YC]\">(\\d+\\.\\d+|\\d+){,4}\\s*.{5}\\s*.{5}\\s*.*",
+	  [{capture, first, list}]).
 
 
 match_falling_stock_with_volume(String) ->
